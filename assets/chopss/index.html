@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>СС Компилятор — Invision Emulator</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    background: #161616;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Arial, sans-serif;
+    color: #d4d4d4;
+    min-height: 100vh;
+  }
+
+  body {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 24px 16px;
+  }
+
+  /* ---------- Контейнер редактора ---------- */
+  .editor-container {
+    max-width: 800px;
+    width: 100%;
+    background: #1f1f1f;
+    border: 1px solid #333;
+    border-radius: 4px;
+    overflow: hidden;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.55);
+  }
+
+  /* ---------- Шапка ---------- */
+  .editor-header {
+    background: #2a2a2a;
+    padding: 10px 14px;
+    border-bottom: 1px solid #333;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .editor-title {
+    font-size: 13px;
+    color: #888;
+    font-weight: 500;
+    letter-spacing: 0.2px;
+  }
+  #clear-btn {
+    background: transparent;
+    color: #888;
+    border: 1px solid #444;
+    padding: 4px 10px;
+    border-radius: 3px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: color .15s, border-color .15s;
+  }
+  #clear-btn:hover {
+    color: #d4d4d4;
+    border-color: #666;
+  }
+
+  /* ---------- Тулбар IPB ---------- */
+  .editor-toolbar {
+    background: #2a2a2a;
+    padding: 6px 8px;
+    border-bottom: 1px solid #333;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex-wrap: wrap;
+  }
+  .tb-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    color: #c0c0c0;
+    width: 28px;
+    height: 28px;
+    border-radius: 3px;
+    cursor: default;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    line-height: 1;
+    transition: background .1s, border-color .1s;
+    user-select: none;
+  }
+  .tb-btn:hover {
+    background: #3a3a3a;
+    border-color: #444;
+  }
+  .tb-btn svg { display: block; }
+  .tb-sep {
+    width: 1px;
+    height: 20px;
+    background: #444;
+    margin: 0 4px;
+  }
+
+  /* ---------- Поле ввода ---------- */
+  #invision-input {
+    background: #181818;
+    min-height: 320px;
+    padding: 12px 14px;
+    color: #d4d4d4;
+    font-size: 14px;
+    line-height: 1.5;
+    outline: none;
+    overflow-y: auto;
+    max-height: 65vh;
+    word-wrap: break-word;
+  }
+  #invision-input:empty::before {
+    content: "Вставьте скриншот (Ctrl+V) или начните вводить текст…";
+    color: #666;
+    pointer-events: none;
+  }
+
+  /* ---------- Магия бесшовности ---------- */
+  #invision-input img {
+    display: block;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* ---------- Футер ---------- */
+  .editor-footer {
+    background: #2a2a2a;
+    padding: 12px 14px;
+    border-top: 1px solid #333;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .footer-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .footer-label {
+    font-size: 13px;
+    color: #b0b0b0;
+    white-space: nowrap;
+  }
+  #quality-slider {
+    width: 130px;
+    cursor: pointer;
+    accent-color: #4a90e2;
+  }
+  #format-select {
+    background: #1f1f1f;
+    color: #d4d4d4;
+    border: 1px solid #444;
+    padding: 5px 8px;
+    border-radius: 3px;
+    font-size: 13px;
+    cursor: pointer;
+    outline: none;
+  }
+  #format-select option { background: #1f1f1f; color: #d4d4d4; }
+  .spacer { flex: 1; }
+  #action-btn {
+    background: #4a90e2;
+    color: #fff;
+    border: none;
+    padding: 8px 20px;
+    border-radius: 3px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background .15s, transform .05s;
+    min-width: 150px;
+  }
+  #action-btn:hover { background: #5a9ef2; }
+  #action-btn:active { transform: translateY(1px); }
+  #action-btn:disabled {
+    background: #555;
+    cursor: not-allowed;
+    color: #bbb;
+  }
+  #action-btn.success {
+    background: #28a745 !important;
+    color: #fff !important;
+  }
+  #action-btn.error {
+    background: #c62828 !important;
+    color: #fff !important;
+  }
+</style>
+</head>
+<body>
+  <div class="editor-container">
+
+    <div class="editor-header">
+      <div class="editor-title">Редактор сообщений (IPB Dark Theme)</div>
+      <button id="clear-btn" type="button" title="Очистить поле ввода">Очистить</button>
+    </div>
+
+    <div class="editor-toolbar" role="toolbar" aria-label="Панель инструментов">
+      <button class="tb-btn" type="button" title="Жирный"><b>B</b></button>
+      <button class="tb-btn" type="button" title="Курсив"><i>I</i></button>
+      <button class="tb-btn" type="button" title="Подчёркнутый"><u>U</u></button>
+      <button class="tb-btn" type="button" title="Зачёркнутый"><s>S</s></button>
+      <div class="tb-sep"></div>
+      <button class="tb-btn" type="button" title="Изображение">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+          <circle cx="8.5" cy="8.5" r="1.5"/>
+          <polyline points="21 15 16 10 5 21"/>
+        </svg>
+      </button>
+      <button class="tb-btn" type="button" title="Ссылка">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+        </svg>
+      </button>
+      <button class="tb-btn" type="button" title="Цитата">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"/>
+          <path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z"/>
+        </svg>
+      </button>
+    </div>
+
+    <div id="invision-input" contenteditable="true" spellcheck="false"></div>
+
+    <div class="editor-footer">
+      <div class="footer-control" id="quality-container">
+        <span class="footer-label" id="quality-label">Качество (85%):</span>
+        <input type="range" id="quality-slider" min="10" max="100" value="85" step="1">
+      </div>
+      <div class="footer-control">
+        <span class="footer-label">Формат:</span>
+        <select id="format-select">
+          <option value="jpeg">JPEG (в буфер)</option>
+          <option value="png">PNG (в файл)</option>
+        </select>
+      </div>
+      <div class="spacer"></div>
+      <button id="action-btn" type="button">Скопировать СС</button>
+    </div>
+
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script>
+  (function () {
+    "use strict";
+
+    document.addEventListener("DOMContentLoaded", function () {
+      var input            = document.getElementById("invision-input");
+      var formatSelect     = document.getElementById("format-select");
+      var qualitySlider    = document.getElementById("quality-slider");
+      var qualityLabel     = document.getElementById("quality-label");
+      var qualityContainer = document.getElementById("quality-container");
+      var actionBtn        = document.getElementById("action-btn");
+      var clearBtn         = document.getElementById("clear-btn");
+      var editorContainer  = document.querySelector(".editor-container");
+
+      /* ====== Инициализация UI ====== */
+      updateUI();
+      updateQualityLabel();
+
+      /* ====== Слушатели ====== */
+      input.addEventListener("paste", handlePaste);
+      input.addEventListener("dragover", function (e) { e.preventDefault(); });
+      input.addEventListener("drop", handleDrop);
+
+      formatSelect.addEventListener("change", updateUI);
+      qualitySlider.addEventListener("input", updateQualityLabel);
+      actionBtn.addEventListener("click", handleAction);
+
+      if (clearBtn) {
+        clearBtn.addEventListener("click", function () {
+          input.innerHTML = "";
+          input.focus();
+        });
+      }
+
+      /* ====== UI-логика футера ====== */
+      function updateUI() {
+        var format = formatSelect.value;
+        if (format === "jpeg") {
+          qualityContainer.style.display = "";
+          if (!actionBtn.classList.contains("success")) {
+            actionBtn.textContent = "Скопировать СС";
+          }
+        } else {
+          qualityContainer.style.display = "none";
+          if (!actionBtn.classList.contains("success")) {
+            actionBtn.textContent = "Отправить СС";
+          }
+        }
+      }
+
+      function updateQualityLabel() {
+        qualityLabel.textContent = "Качество (" + qualitySlider.value + "%):";
+      }
+
+      /* ====== Обработка вставки из буфера ======
+         КРИТИЧНО: html2canvas не умеет рендерить blob:URL из буфера обмена
+         при работе с file:// — нужно перевести File в data:URL. */
+      function handlePaste(e) {
+        var cd = e.clipboardData;
+        if (!cd) return;
+        var items = cd.items;
+        if (!items) return;
+
+        for (var i = 0; i < items.length; i++) {
+          var item = items[i];
+          if (item.kind === "file" && item.type && item.type.indexOf("image/") === 0) {
+            e.preventDefault();
+            var file = item.getAsFile();
+            if (!file) continue;
+            readFileAsImage(file);
+            return;
+          }
+        }
+        // Если изображений нет — разрешаем стандартную вставку текста
+      }
+
+      function handleDrop(e) {
+        var dt = e.dataTransfer;
+        if (!dt || !dt.files || !dt.files.length) return;
+        var handled = false;
+        for (var i = 0; i < dt.files.length; i++) {
+          var f = dt.files[i];
+          if (f.type && f.type.indexOf("image/") === 0) {
+            e.preventDefault();
+            readFileAsImage(f);
+            handled = true;
+          }
+        }
+        return handled;
+      }
+
+      function readFileAsImage(file) {
+        var reader = new FileReader();
+        reader.onload = function (ev) {
+          var img = document.createElement("img");
+          img.src = ev.target.result; // data:URL — html2canvas отрендерит без CORS
+          img.dataset.pasted = "1";
+          input.appendChild(img);
+          moveCursorToEnd();
+        };
+        reader.onerror = function () {
+          console.error("FileReader error");
+        };
+        reader.readAsDataURL(file);
+      }
+
+      function moveCursorToEnd() {
+        try {
+          var range = document.createRange();
+          range.selectNodeContents(input);
+          range.collapse(false);
+          var sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(range);
+          input.focus();
+        } catch (err) { /* ignore */ }
+      }
+
+      /* ====== Проверка перед экспортом ====== */
+      function isEmpty() {
+        if (!input) return true;
+        if (input.querySelector("img")) return false;
+        var txt = (input.textContent || "").trim();
+        return txt.length === 0;
+      }
+
+      /* ====== Ожидание загрузки всех картинок ======
+         data:URL тоже грузятся асинхронно — нужно дождаться naturalWidth. */
+      function waitForImages() {
+        var images = Array.prototype.slice.call(input.querySelectorAll("img"));
+        return Promise.all(images.map(function (img) {
+          if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+          return new Promise(function (resolve) {
+            img.addEventListener("load",  resolve, { once: true });
+            img.addEventListener("error", resolve, { once: true });
+            // Подстраховка: через 2 секунды продолжаем в любом случае
+            setTimeout(resolve, 2000);
+          });
+        }));
+      }
+
+      /* ====== Подготовка поля к рендеру ======
+         Фиксит все три проблемы:
+         1) Ширина = max naturalWidth по всем картинкам (никаких 1300px).
+         2) Убираем max-height/overflow — ничего не обрезается.
+         3) Фон будет чёрным (см. renderToCanvas → backgroundColor: "#000000"). */
+      function prepareForRender() {
+        var images = Array.prototype.slice.call(input.querySelectorAll("img"));
+
+        // Ширина по самой широкой картинке (натуральные пиксели).
+        var maxWidth = 0;
+        images.forEach(function (img) {
+          if (img.naturalWidth && img.naturalWidth > maxWidth) {
+            maxWidth = img.naturalWidth;
+          }
+        });
+
+        // Если картинок нет — берём scrollWidth (текстовый режим).
+        if (maxWidth === 0) {
+          maxWidth = input.scrollWidth || 800;
+        }
+
+        // Сохраняем оригинальные inline-стили, чтобы потом восстановить.
+        var saved = {
+          inputInline:     input.getAttribute("style") || "",
+          containerInline: editorContainer ? (editorContainer.getAttribute("style") || "") : "",
+          imageStyles: images.map(function (img) {
+            return { el: img, style: img.getAttribute("style") || "" };
+          })
+        };
+
+        // Поле ввода: точная ширина, без паддингов, без обрезки, без min-height.
+        input.style.width       = maxWidth + "px";
+        input.style.maxWidth    = maxWidth + "px";
+        input.style.minHeight   = "0";
+        input.style.maxHeight   = "none";
+        input.style.height      = "auto";
+        input.style.overflow    = "visible";
+        input.style.overflowX   = "visible";
+        input.style.overflowY   = "visible";
+        input.style.padding     = "0";
+
+        // КРИТИЧНО: собственный фон поля (#181818 из CSS) рендерится html2canvas
+        // ПОВЕРХ опции backgroundColor, и перекрывает его. Поэтому без явного
+        // override выход получался #171717 вместо чистого #000000.
+        input.style.background       = "#000000";
+        input.style.backgroundColor  = "#000000";
+        input.style.backgroundImage  = "none";
+
+        // Чтобы родительский .editor-container (overflow:hidden) не клиппил
+        // захваченный элемент — временно отключаем.
+        if (editorContainer) {
+          editorContainer.style.overflow = "visible";
+        }
+
+        // Каждую картинку — в натуральный размер, без max-width:100%.
+        images.forEach(function (img) {
+          if (img.naturalWidth) {
+            img.style.width      = img.naturalWidth + "px";
+            img.style.maxWidth   = "none";
+            img.style.height     = "auto";
+            img.style.margin     = "0";
+            img.style.padding    = "0";
+            img.style.border     = "none";
+            img.style.display    = "block";
+          }
+        });
+
+        return { saved: saved, width: maxWidth };
+      }
+
+      function restoreAfterRender(state) {
+        // Поле ввода
+        if (state.saved.inputInline) {
+          input.setAttribute("style", state.saved.inputInline);
+        } else {
+          input.removeAttribute("style");
+        }
+        // Контейнер
+        if (editorContainer) {
+          if (state.saved.containerInline) {
+            editorContainer.setAttribute("style", state.saved.containerInline);
+          } else {
+            editorContainer.removeAttribute("style");
+          }
+        }
+        // Картинки
+        state.saved.imageStyles.forEach(function (s) {
+          if (s.style) {
+            s.el.setAttribute("style", s.style);
+          } else {
+            s.el.removeAttribute("style");
+          }
+        });
+      }
+
+      /* ====== Главный рендер ====== */
+      function renderToCanvas(bgColor) {
+        return waitForImages().then(function () {
+          var state = prepareForRender();
+
+          // После смены стилей — форсим reflow, чтобы scrollHeight был актуальным.
+          // eslint-disable-next-line no-unused-expressions
+          input.offsetHeight;
+
+          var width  = state.width;
+          var height = input.scrollHeight;
+
+          // Подстраховка: если scrollHeight вдруг 0 — минимум 1px.
+          if (!height || height < 1) height = 1;
+
+          return html2canvas(input, {
+            scale: 1,                 // НЕТ удвоения — ширина = naturalWidth
+            backgroundColor: bgColor, // "#000000" → пустоты кристально чёрные
+            useCORS: true,
+            allowTaint: true,
+            logging: false,
+            width: width,             // явно задаём размер холста
+            height: height,
+            x: 0,
+            y: 0,
+            scrollX: 0,
+            scrollY: 0,
+            windowWidth: width,
+            windowHeight: height
+          }).then(function (canvas) {
+            restoreAfterRender(state);
+            return canvas;
+          }, function (err) {
+            restoreAfterRender(state);
+            throw err;
+          });
+        });
+      }
+
+      /* ====== Главная кнопка ====== */
+      function handleAction() {
+        if (typeof window.html2canvas === "undefined") {
+          alert("Библиотека html2canvas не загрузилась.\nПроверьте интернет-соединение (CDN) и обновите страницу.");
+          return;
+        }
+        if (isEmpty()) {
+          alert("Поле ввода пустое.\nВставьте скриншот (Ctrl+V) перед экспортом.");
+          return;
+        }
+
+        var format = formatSelect.value;
+        actionBtn.disabled = true;
+        actionBtn.classList.remove("success", "error");
+        actionBtn.textContent = (format === "png") ? "Рендеринг…" : "Копирование…";
+
+        if (format === "png") {
+          exportPNG().then(function () {
+            actionBtn.disabled = false;
+            actionBtn.textContent = "Отправить СС";
+          }).catch(function (err) {
+            console.error("PNG export error:", err);
+            showError(err);
+          });
+        } else {
+          exportJPEG().then(function () {
+            actionBtn.disabled = false;
+            // restore произойдёт в showSuccess через 1.5с
+          }).catch(function (err) {
+            console.error("JPEG export error:", err);
+            showError(err);
+          });
+        }
+      }
+
+      function showError(err) {
+        actionBtn.classList.remove("success");
+        actionBtn.classList.add("error");
+        actionBtn.textContent = "Ошибка";
+        var msg = err && err.message ? err.message : String(err);
+        setTimeout(function () {
+          actionBtn.classList.remove("error");
+          actionBtn.disabled = false;
+          updateUI(); // вернём исходный текст
+        }, 1800);
+        alert("Ошибка экспорта:\n" + msg);
+      }
+
+      /* ====== Режим А: PNG (сохранение файлом) ====== */
+      function exportPNG() {
+        // Фон чёрный и для PNG — пустоты должны быть кристально чёрными.
+        return renderToCanvas("#000000").then(function (canvas) {
+          return new Promise(function (resolve, reject) {
+            canvas.toBlob(function (blob) {
+              if (!blob) { reject(new Error("toBlob вернул null для PNG")); return; }
+              var url = URL.createObjectURL(blob);
+              var a = document.createElement("a");
+              a.href = url;
+              a.download = "ss_compiled.png";
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
+              resolve();
+            }, "image/png");
+          });
+        });
+      }
+
+      /* ====== Режим Б: JPEG → сжатие → PNG-контейнер → буфер обмена ====== */
+      function exportJPEG() {
+        // Проверка поддержки Clipboard API
+        if (!navigator.clipboard || !navigator.clipboard.write || typeof window.ClipboardItem === "undefined") {
+          return Promise.reject(new Error(
+            "Буфер обмена недоступен. Используйте Chrome/Edge по протоколу file:// или https."
+          ));
+        }
+
+        var quality = parseInt(qualitySlider.value, 10) / 100;
+
+        return renderToCanvas("#000000").then(function (canvas) {
+          // Сжатие в JPEG data:URL с выбранным качеством
+          var jpegDataUrl;
+          try {
+            jpegDataUrl = canvas.toDataURL("image/jpeg", quality);
+          } catch (err) {
+            throw new Error("toDataURL jpeg неудачно: " + err.message);
+          }
+          if (!jpegDataUrl || jpegDataUrl.indexOf("data:image/jpeg") !== 0) {
+            throw new Error("Не удалось получить JPEG data URL");
+          }
+
+          // Загрузить сжатый JPEG во временный Image
+          return new Promise(function (resolve, reject) {
+            var img = new Image();
+            img.onload = function () {
+              var w = img.naturalWidth  || canvas.width;
+              var h = img.naturalHeight || canvas.height;
+              var tempCanvas = document.createElement("canvas");
+              tempCanvas.width  = w;
+              tempCanvas.height = h;
+              var ctx = tempCanvas.getContext("2d");
+
+              // На всякий случай: заливаем чёрным перед рисованием JPEG.
+              ctx.fillStyle = "#000000";
+              ctx.fillRect(0, 0, w, h);
+              ctx.drawImage(img, 0, 0, w, h);
+
+              // Экспорт во временный PNG-blob (JPEG-данные в PNG-контейнере)
+              tempCanvas.toBlob(function (blob) {
+                if (!blob) { reject(new Error("toBlob PNG вернул null")); return; }
+                resolve(blob);
+              }, "image/png");
+            };
+            img.onerror = function () {
+              reject(new Error("Не удалось загрузить сжатое JPEG-изображение"));
+            };
+            img.src = jpegDataUrl;
+          });
+        }).then(function (blob) {
+          // Запись в системный буфер через ClipboardItem
+          return navigator.clipboard.write([
+            new ClipboardItem({ "image/png": blob })
+          ]);
+        }).then(function () {
+          // Визуальная обратная связь (1.5 секунды)
+          showSuccess();
+        });
+      }
+
+      function showSuccess() {
+        actionBtn.classList.remove("error");
+        actionBtn.classList.add("success");
+        actionBtn.textContent = "✓ Скопировано!";
+        actionBtn.disabled = false;
+        setTimeout(function () {
+          actionBtn.classList.remove("success");
+          updateUI(); // вернёт текст «Скопировать СС» для jpeg-режима
+        }, 1500);
+      }
+
+    });
+  })();
+  </script>
+</body>
+</html>

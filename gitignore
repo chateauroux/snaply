@@ -1,0 +1,22 @@
+# Rust
+/target/
+debug/
+*.pdb
+
+# Snaply runtime files
+snaply_config.txt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Логи
+*.log
