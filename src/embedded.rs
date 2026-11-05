@@ -1,17 +1,12 @@
 // ============================================================================
-//  embedded.rs — встроенные в бинарник ассеты
+//  embedded.rs — ВСЕ ассеты встроены в бинарник
 // ----------------------------------------------------------------------------
 //  Все файлы из assets/ встраиваются в .exe через include_bytes!/include_str!.
 //  Это позволяет раздавать Snaply одним .exe без папки assets/.
 //
-//  Шрифт Inter, иконка, ChopSS (index.html + html2canvas.min.js)
-//  — всё внутри бинарника.
-//
-//  Для ChopSS дополнительно: при запуске извлекаем index.html и html2canvas.min.js
-//  в %TEMP%/snaply_chopss/, чтобы браузер мог открыть file:// URL.
-//
-//  Для background.png и notification.wav — опциональная загрузка с диска
-//  (не embed'им, потому что они могут отсутствовать у разработчика).
+//  build.rs гарантирует что все файлы существуют перед сборкой — если
+//  background.png или notification.wav отсутствуют, создаётся пустая
+//  заглушка (0 байт). На runtime отличаем пустой файл от настоящего по длине.
 // ============================================================================
 
 use std::path::PathBuf;
@@ -19,7 +14,7 @@ use std::path::PathBuf;
 // ----------------------------------------------------------------------------
 //  Embed файлов на этапе компиляции.
 //  Пути относительные — от корня crate (где лежит Cargo.toml).
-//  Файлы ОБЯЗАТЕЛЬНО должны существовать при cargo build.
+//  build.rs гарантирует что файлы существуют (создаёт заглушки если нет).
 // ----------------------------------------------------------------------------
 
 /// Шрифт Inter (OFL 1.1). ~880 КБ.
@@ -34,37 +29,36 @@ pub const CHOPSS_HTML: &str = include_str!("../assets/chopss/index.html");
 /// html2canvas.min.js (~200 КБ).
 pub const CHOPSS_HTML2CANVAS: &[u8] = include_bytes!("../assets/chopss/html2canvas.min.js");
 
+/// Фоновая картинка background.png. Может быть пустой (0 байт) — тогда фолбэк.
+pub const BACKGROUND_PNG: &[u8] = include_bytes!("../assets/background.png");
+
+/// Звук уведомления notification.wav. Может быть пустым (0 байт) — тогда фолбэк.
+pub const NOTIFICATION_WAV: &[u8] = include_bytes!("../assets/notification.wav");
+
 // ----------------------------------------------------------------------------
-//  Опциональные ассеты — загружаются с диска при запуске (не embed'ятся).
-//  Если файла нет — используется фолбэк.
+//  Опциональные ассеты — возвращают Some только если embed непустой.
+//  build.rs создаёт пустые заглушки (0 байт) если файла нет, и мы здесь
+//  отличаем «нет файла» (0 байт) от «есть файл».
 // ----------------------------------------------------------------------------
 
-/// Загрузить notification.wav с диска (опционально). Возвращает None если нет.
-pub fn load_notification_wav() -> Option<Vec<u8>> {
-    find_asset_file("notification.wav")
-        .and_then(|p| std::fs::read(&p).ok())
+/// Вернуть background.png если он встроен и непустой.
+/// Возвращает None если файл-заглушка (0 байт) — тогда используем градиент.
+pub fn get_background_png() -> Option<&'static [u8]> {
+    if BACKGROUND_PNG.is_empty() {
+        None
+    } else {
+        Some(BACKGROUND_PNG)
+    }
 }
 
-/// Загрузить background.png с диска (опционально). Возвращает None если нет.
-pub fn load_background_png() -> Option<Vec<u8>> {
-    find_asset_file("background.png")
-        .and_then(|p| std::fs::read(&p).ok())
-}
-
-fn find_asset_file(name: &str) -> Option<PathBuf> {
-    let mut candidates: Vec<PathBuf> = Vec::new();
-    if let Ok(cwd) = std::env::current_dir() {
-        candidates.push(cwd.join("assets").join(name));
-        candidates.push(cwd.join("target").join("debug").join("assets").join(name));
-        candidates.push(cwd.join("target").join("release").join("assets").join(name));
+/// Вернуть notification.wav если он встроен и непустой.
+/// Возвращает None если файл-заглушка (0 байт) — тогда системный MessageBeep.
+pub fn get_notification_wav() -> Option<&'static [u8]> {
+    if NOTIFICATION_WAV.is_empty() {
+        None
+    } else {
+        Some(NOTIFICATION_WAV)
     }
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(dir) = exe.parent() {
-            candidates.push(dir.join("assets").join(name));
-            candidates.push(dir.join(name));
-        }
-    }
-    candidates.into_iter().find(|p| p.exists())
 }
 
 // ----------------------------------------------------------------------------
@@ -80,7 +74,6 @@ pub fn extract_chopss() -> Result<PathBuf, String> {
     let js_path = temp_dir.join("html2canvas.min.js");
 
     // Если файлы уже есть — не перезаписываем (быстрее запуск).
-    // Контрольная сумма не проверяется — предполагаем что версия стабальна.
     if !html_path.exists() {
         std::fs::write(&html_path, CHOPSS_HTML).map_err(|e| e.to_string())?;
     }

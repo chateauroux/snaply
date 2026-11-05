@@ -859,10 +859,10 @@ fn paint_background(ui: &mut egui::Ui, bg_texture: Option<&egui::TextureHandle>)
 //  Загрузка background.png (опционально)
 // ============================================================================
 fn load_background_texture(ctx: &egui::Context) -> Option<egui::TextureHandle> {
-    // background.png — опциональный, загружается с диска (не embed'ится,
-    // потому что может отсутствовать у разработчика при сборке).
-    let bytes = crate::embedded::load_background_png()?;
-    let image = image::load_from_memory(&bytes).ok()?.to_rgba8();
+    // background.png встроен в бинарник. Если embed пустой (0 байт — заглушка
+    // созданная build.rs) — возвращаем None, будет градиент.
+    let bytes = crate::embedded::get_background_png()?;
+    let image = image::load_from_memory(bytes).ok()?.to_rgba8();
     let size = [image.width() as usize, image.height() as usize];
     let pixels = image.into_raw();
 
